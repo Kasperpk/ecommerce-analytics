@@ -19,9 +19,9 @@ def main():
             statement = statement.strip()
             if not statement:
                 continue
-            result = con.execute(statement)
-            if result.description:
-                con.sql(statement).show()
+            result = con.sql(statement)
+            if result is not None:
+                result.show()
 
     con.close()
 

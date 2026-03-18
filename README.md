@@ -8,11 +8,11 @@ An end-to-end ELT pipeline built with **SQL** (DuckDB) following the **medallion
 generate_ecommerce_data.py          → generates messy CSV files (data/raw/)
         │
         ▼
-┌─────────────┐   SQL    ┌──────────────┐   SQL    ┌─────────────┐   SQL    ┌────────────┐
-│   Bronze    │ ───────► │  Transform   │ ───────► │   Silver    │ ───────► │    Gold    │
-│ (raw load)  │          │ (validate)   │          │  (cleaned)  │          │ (star      │
-│             │          │              │          │  (deduped)  │          │  schema)   │
-└─────────────┘          └──────┬───────┘          └─────────────┘          └────────────┘
+┌─────────────┐   SQL    ┌──────────────┐   SQL    ┌─────────────┐   SQL    ┌────────────┐   SQL    ┌────────────┐
+│   Bronze    │ ───────► │  Transform   │ ───────► │   Silver    │ ───────► │    Gold    │ ───────► │  Analysis  │
+│ (raw load)  │          │ (validate)   │          │  (cleaned)  │          │ (star      │          │ (business  │
+│             │          │              │          │  (deduped)  │          │  schema)   │          │  insights) │
+└─────────────┘          └──────┬───────┘          └─────────────┘          └────────────┘          └────────────┘
                                 │
                                 ▼
                         ┌──────────────┐
@@ -36,9 +36,11 @@ These issues are detected and handled through the transform/validation layer, wi
 ## Project Structure
 
 ```
-├── generate_ecommerce_data.py              # Raw data generator
+├── hakio_data_project.py               # Raw data generator (messy CSVs with intentional issues)
 ├── run_sql.py                         # SQL file runner (executes .sql against DuckDB)
-├── data_exploration.ipynb             # Jupyter notebook: data exploration & quality analysis
+├── run_pipeline.py                    # One-command full pipeline rebuild
+├── data_exploration.ipynb             # Notebook: data exploration & quality analysis
+├── gold_layer_analysis.ipynb          # Notebook: business insights & visualizations
 ├── data/
 │   ├── analytics.duckdb               # DuckDB database (gitignored, rebuilt by pipeline)
 │   ├── raw/                           # Generated CSV files (gitignored)
@@ -49,12 +51,12 @@ These issues are detected and handled through the transform/validation layer, wi
 │   │       └── refunds.csv
 │   └── sql/
 │       ├── create_schemas.sql         # Schema definitions
-│       ├── verify_bronze.sql          # Bronze row count verification
 │       ├── bronze/                    # Raw CSV → bronze tables
 │       ├── transform/                 # Validation rules + error tagging
 │       ├── data_quality/              # Error aggregation tables
 │       ├── silver/                    # Deduped, validated, clean tables
-│       └── gold/                      # Star schema (dims + facts)
+│       ├── gold/                      # Star schema (dims + facts)
+│       └── analysis/                  # Analytical views (revenue, profitability, segments)
 ```
 
 ## Getting Started
@@ -74,22 +76,15 @@ python generate_ecommerce_data.py --days 30
 ### 2. Run the full pipeline
 
 ```bash
-python run_sql.py data/sql/create_schemas.sql
-
-python run_sql.py data/sql/bronze/bronze_products.sql data/sql/bronze/bronze_orders.sql data/sql/bronze/bronze_order_lines.sql data/sql/bronze/bronze_refunds.sql
-
-python run_sql.py data/sql/transform/transform_products.sql data/sql/transform/transform_orders.sql data/sql/transform/transform_order_lines.sql data/sql/transform/transform_refunds.sql
-
-python run_sql.py data/sql/data_quality/dq_products.sql data/sql/data_quality/dq_orders.sql data/sql/data_quality/dq_order_lines.sql data/sql/data_quality/dq_refunds.sql
-
-python run_sql.py data/sql/silver/silver_products.sql data/sql/silver/silver_orders.sql data/sql/silver/silver_order_lines.sql data/sql/silver/silver_refunds.sql
-
-python run_sql.py data/sql/gold/gold_dim_product.sql data/sql/gold/gold_dim_order.sql data/sql/gold/gold_fact_refund.sql data/sql/gold/gold_fact_order_line.sql
+python run_pipeline.py
 ```
+
+This rebuilds everything end-to-end: schemas → bronze → transform → data quality → silver → gold → analysis.
 
 ### 3. Explore the data
 
-Open `data_exploration.ipynb` in VS Code or Jupyter to see the data quality analysis and visualizations.
+- **`data_exploration.ipynb`** — Data quality analysis: missing values, duplicates, outliers, bronze vs silver comparison
+- **`gold_layer_analysis.ipynb`** — Business insights: revenue trends, product profitability, customer segmentation, country performance
 
 ### 4. Query interactively
 
@@ -111,3 +106,14 @@ Or use **DBeaver** connected to `data/analytics.duckdb` for a full SQL IDE exper
 | **Data Quality** | `data_quality.*` | Aggregated error counts per table |
 | **Silver** | `silver.*` | Clean, deduped records (only rows with no errors, latest version per key) |
 | **Gold** | `gold.*` | Star schema views — `DimProduct`, `DimOrder`, `FactOrderLine`, `FactRefund` |
+| **Analysis** | `gold.analysis_*` | Business insight views built on top of the star schema |
+
+## Analysis Views — SQL Techniques Demonstrated
+
+| View | What it shows | SQL techniques |
+|------|--------------|----------------|
+| `analysis_daily_revenue` | Revenue time series with 7-day moving average | `LAG()`, `AVG() OVER (ROWS BETWEEN)`, date aggregation |
+| `analysis_product_profitability` | Margin analysis ranked within category | `RANK() OVER (PARTITION BY)`, CTEs, `SUM() OVER()` for % of total |
+| `analysis_refund_rates` | Refund rates by product type and country | Multi-table JOINs, `COALESCE`, ratio calculations |
+| `analysis_customer_segments` | Lifetime value with spend tiers and frequency | Multi-level CTEs, `NTILE(4)`, `DATEDIFF`, `CASE` |
+| `analysis_country_performance` | ABC revenue tiering (Pareto) | `DENSE_RANK`, cumulative `SUM() OVER (ORDER BY)`, `CASE` |
