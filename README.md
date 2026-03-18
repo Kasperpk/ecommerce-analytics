@@ -36,7 +36,7 @@ These issues are detected and handled through the transform/validation layer, wi
 ## Project Structure
 
 ```
-├── hakio_data_project.py               # Raw data generator (messy CSVs with intentional issues)
+├── generate_ecommerce_data.py               # Raw data generator (messy CSVs with intentional issues)
 ├── run_sql.py                         # SQL file runner (executes .sql against DuckDB)
 ├── run_pipeline.py                    # One-command full pipeline rebuild
 ├── data_exploration.ipynb             # Notebook: data exploration & quality analysis
